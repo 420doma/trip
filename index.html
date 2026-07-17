@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>420Doma's Trip — Km Moto</title>
+<!-- Usiamo jsDelivr per maggiore compatibilità e velocità su reti mobili -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --asfalto: #14161a;
+    --pannello: #1c2026;
+    --pannello-alt: #21262e;
+    --pannello-alza: #262c34;
+    --bordo: #2b313a;
+    --ambra: #ffb000;
+    --ambra-scura: #b87700;
+    --teal: #49d9c4;
+    --live: #ff5d5d;
+    --testo: #edeef0;
+    --testo-muto: #8b93a3;
+    --raggio: 14px;
+  }
+
+  * { box-sizing: border-box; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(circle at 15% 0%, rgba(255,176,0,0.07), transparent 42%),
+      radial-gradient(circle at 85% 15%, rgba(73,217,196,0.05), transparent 38%),
+      var(--asfalto);
+    color: var(--testo);
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    padding: 32px 20px 80px;
+  }
+
+  .num {
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .display {
+    font-family: 'Rajdhani', 'Inter', sans-serif;
+    letter-spacing: 0.04em;
+  }
+
+  a { color: inherit; }
+
+  header {
+    max-width: 960px;
+    margin: 0 auto 28px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid var(--bordo);
+    padding-bottom: 18px;
+  }
+
+  header .titolo {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--testo);
+  }
+
+  header .titolo .accento {
+    color: var(--ambra);
+  }
+
+  header .data-oggi {
+    font-size: 12px;
+    color: var(--testo-muto);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  main {
+    max-width: 960px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* ODOMETRO PRINCIPALE                                               */
+  /* ---------------------------------------------------------------- */
+
+  .odometro-riquadro {
+    background: linear-gradient(180deg, var(--pannello-alt), var(--pannello));
+    border: 1px solid var(--bordo);
+    border-radius: var(--raggio);
+    padding: 28px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 24px;
+    box-shadow: 0 0 0 1px rgba(255,176,0,0.03), inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+
+  .odometro-label {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--testo-muto);
+    margin-bottom: 8px;
+  }
+
+  .odometro-cifre {
+    display: flex;
+    gap: 4px;
+  }
+
+  .odometro-cifre .cifra-finestra {
+    position: relative;
+    width: 38px;
+    height: 54px;
+    overflow: hidden;
+    background: #0d0f12;
+    border: 1px solid #34393f;
+    border-radius: 5px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+  }
+
+  .odometro-cifre .cifra-finestra .rullo {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    transition: transform 1.1s cubic-bezier(.2,.9,.25,1);
+  }
+
+  .odometro-cifre .cifra-finestra .rullo span {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--ambra);
+    text-shadow: 0 0 12px rgba(255,176,0,0.45);
+  }
+
+  .odometro-cifre .cifra-finestra.punto {
+    width: 14px;
+    background: none;
+    border: none;
+    box-shadow: none;
+    align-items: flex-end;
+    display: flex;
+  }
+  .odometro-cifre .cifra-finestra.punto span {
+    position: static;
+    height: auto;
+    color: var(--testo-muto);
+    font-size: 30px;
+    padding-bottom: 6px;
+  }
+
+  .odometro-unita {
+    margin-left: 8px;
+    align-self: flex-end;
+    font-size: 13px;
+    color: var(--testo-muto);
+    padding-bottom: 8px;
+  }
+
+  .focus-mini {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .focus-card {
+    background: var(--pannello-alza);
+    border: 1px solid var(--bordo);
+    border-radius: 10px;
+    padding: 14px 18px;
+    min-width: 140px;
+  }
+
+  .focus-card .etichetta {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--testo-muto);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .puntino-live {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 8px var(--live);
+    animation: pulsa 1.8s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes pulsa {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.85); }
+  }
+
+  .focus-card.oggi .valore {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--testo);
+  }
+
+  .focus-card.record {
+    border-color: var(--ambra-scura);
+    background: linear-gradient(135deg, rgba(255,176,0,0.10), var(--pannello-alza));
+    position: relative;
+  }
+
+  .focus-card.record::before {
+    content: "🏆";
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 14px;
+    filter: grayscale(0.15);
+  }
+
+  .focus-card.record .valore {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--ambra);
+  }
+
+  .focus-card.record .sottovalore {
+    font-size: 12px;
+    color: var(--testo-muto);
+    margin-top: 2px;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* GRAFICO                                                           */
+  /* ---------------------------------------------------------------- */
+
+  section.pannello-sezione {
+    background: var(--pannello);
+    border: 1px solid var(--bordo);
+    border-radius: var(--raggio);
+    padding: 24px;
+  }
+
+  section.pannello-sezione h2 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--testo-muto);
+    margin: 0 0 18px;
+    font-weight: 600;
+  }
+
+  .grafico-contenitore {
+    position: relative;
+    height: 300px;
+  }
+
+  .stato-messaggio {
+    text-align: center;
+    color: var(--testo-muto);
+    font-size: 13px;
+    padding: 40px 0;
+  }
+
+  .stato-messaggio.errore {
+    color: #ff6b6b;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* CALENDARIO                                                        */
+  /* ---------------------------------------------------------------- */
+
+  .calendario-intestazione {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .calendario-mese {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--testo);
+    text-transform: capitalize;
+  }
+
+  .calendario-nav {
+    display: flex;
+    gap: 8px;
+  }
+
+  .calendario-nav button {
+    background: var(--pannello-alza);
+    border: 1px solid var(--bordo);
+    color: var(--testo);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .calendario-nav button:hover:not(:disabled) {
+    background: var(--bordo);
+    border-color: var(--ambra-scura);
+  }
+
+  .calendario-nav button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .calendario-nav button:focus-visible,
+  .cella-giorno:focus-visible {
+    outline: 2px solid var(--teal);
+    outline-offset: 2px;
+  }
+
+  .calendario-giorni-settimana {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .calendario-giorni-settimana div {
+    text-align: center;
+    font-size: 11px;
+    color: var(--testo-muto);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .calendario-griglia {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+  }
+
+  .cella-giorno {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    border: 1px solid var(--bordo);
+    background: var(--pannello-alza);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    font-size: 12px;
+    color: var(--testo-muto);
+    transition: transform 0.12s, border-color 0.12s;
+  }
+
+  .cella-giorno:hover {
+    transform: translateY(-2px);
+    border-color: var(--teal);
+  }
+
+  .cella-giorno.vuota {
+    visibility: hidden;
+    cursor: default;
+  }
+
+  .cella-giorno.con-dati {
+    color: var(--asfalto);
+    font-weight: 600;
+  }
+
+  .cella-giorno .num-giorno {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .cella-giorno.oggi {
+    box-shadow: 0 0 0 2px var(--teal);
+  }
+
+  .cella-giorno.record-giorno::after {
+    content: "🏆";
+    position: absolute;
+    top: 1px;
+    right: 2px;
+    font-size: 9px;
+  }
+
+  .cella-giorno.selezionata {
+    box-shadow: 0 0 0 2px var(--ambra);
+  }
+
+  .calendario-dettaglio {
+    margin-top: 18px;
+    padding: 16px 18px;
+    background: var(--pannello-alza);
+    border: 1px solid var(--bordo);
+    border-left: 3px solid var(--ambra);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--testo);
+  }
+
+  .calendario-dettaglio .data-selezionata {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    text-transform: capitalize;
+    margin-bottom: 4px;
+  }
+
+  .calendario-dettaglio .km-selezionati {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    color: var(--ambra);
+    font-weight: 700;
+  }
+
+  .calendario-dettaglio .velocita-selezionata {
+    font-size: 12px;
+    color: var(--testo-muto);
+    margin-top: 4px;
+  }
+
+  .ultimo-aggiornamento {
+    max-width: 960px;
+    margin: 4px auto 0;
+    font-size: 11px;
+    color: var(--testo-muto);
+    text-align: right;
+  }
+
+  footer {
+    max-width: 960px;
+    margin: 24px auto 0;
+    font-size: 11px;
+    color: var(--testo-muto);
+    text-align: center;
+    line-height: 1.7;
+  }
+
+  footer .firma {
+    font-family: 'Rajdhani', sans-serif;
+    color: var(--ambra);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }
+
+  @media (max-width: 560px) {
+    .odometro-riquadro { padding: 22px; }
+    .odometro-cifre .cifra-finestra { width: 30px; height: 44px; }
+    .odometro-cifre .cifra-finestra .rullo span { height: 44px; font-size: 24px; }
+    .focus-mini { width: 100%; justify-content: space-between; }
+    .focus-card { min-width: 0; flex: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="titolo">420Doma's Trip <span class="accento">— Km moto</span></div>
+  <div class="data-oggi" id="data-oggi"></div>
+</header>
+
+<main>
+
+  <div class="odometro-riquadro">
+    <div>
+      <div class="odometro-label">Totale ultimi 7 giorni</div>
+      <div style="display:flex; align-items:flex-end;">
+        <div class="odometro-cifre" id="odometro"></div>
+        <div class="odometro-unita">km</div>
+      </div>
+    </div>
+    <div class="focus-mini">
+      <div class="focus-card oggi">
+        <div class="etichetta"><span class="puntino-live" id="puntino-oggi"></span>Oggi</div>
+        <div class="valore num" id="stat-oggi">—</div>
+      </div>
+      <div class="focus-card record">
+        <div class="etichetta">Record giornaliero</div>
+        <div class="valore num" id="stat-record">—</div>
+        <div class="sottovalore" id="stat-record-data">—</div>
+      </div>
+    </div>
+  </div>
+
+  <section class="pannello-sezione">
+    <h2>Chilometri per giorno (ultimi 30)</h2>
+    <div class="grafico-contenitore">
+      <canvas id="grafico-km"></canvas>
+      <div id="stato-messaggio" class="stato-messaggio">Caricamento dati in corso&hellip;</div>
+    </div>
+  </section>
+
+  <section class="pannello-sezione">
+    <h2>Calendario</h2>
+    <div class="calendario-intestazione">
+      <div class="calendario-mese" id="calendario-mese">—</div>
+      <div class="calendario-nav">
+        <button id="mese-precedente" type="button" aria-label="Mese precedente">&lsaquo;</button>
+        <button id="mese-successivo" type="button" aria-label="Mese successivo">&rsaquo;</button>
+      </div>
+    </div>
+    <div class="calendario-giorni-settimana">
+      <div>Lun</div><div>Mar</div><div>Mer</div><div>Gio</div><div>Ven</div><div>Sab</div><div>Dom</div>
+    </div>
+    <div class="calendario-griglia" id="calendario-griglia"></div>
+    <div class="calendario-dettaglio" id="calendario-dettaglio" style="display:none;">
+      <div class="data-selezionata" id="dettaglio-data"></div>
+      <div class="km-selezionati num" id="dettaglio-km"></div>
+      <div class="velocita-selezionata" id="dettaglio-velocita"></div>
+    </div>
+  </section>
+
+  <div class="ultimo-aggiornamento" id="ultimo-aggiornamento"></div>
+
+</main>
+
+<footer>
+  Dati raccolti automaticamente via Traccar Client &rarr; Raspberry Pi 5 (Tailscale Funnel)<br>
+  <span class="firma">420Doma</span>
+</footer>
+
+<script>
+  // ========================================================================
+  // CONFIGURAZIONE — MODIFICA QUESTA RIGA
+  // ========================================================================
+  // La rotta /api/km è pubblica in lettura (nessun secret): espone solo dati
+  // aggregati che sono comunque mostrati su questa pagina pubblica.
+  const URL_API = "https://doma.tail0580b3.ts.net/api/km?giorni=365";
+
+  // Ogni quanti secondi ricaricare automaticamente i dati (60 = ogni minuto)
+  const INTERVALLO_AGGIORNAMENTO_SECONDI = 60;
+
+  const MESI_IT = [
+    "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+    "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
+  ];
+
+  let graficoCorrente = null;
+  let datiPerData = {};       // "YYYY-MM-DD" -> { km, velocita_media_kmh }
+  let dataRecord = null;      // "YYYY-MM-DD" del record
+  let dataOggiStr = null;     // "YYYY-MM-DD" di oggi (secondo il server)
+  let dataMinima = null;      // prima data disponibile nel dataset
+  let meseVisualizzato = null; // {anno, mese} (mese 0-11) attualmente mostrato nel calendario
+
+  document.getElementById("data-oggi").textContent = new Date().toLocaleDateString("it-IT", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric"
+  });
+
+  // --------------------------------------------------------------------
+  // ODOMETRO CON ANIMAZIONE "A RULLO"
+  // --------------------------------------------------------------------
+
+  function costruisciOdometro(numero) {
+    const cifre = Math.round(numero).toString().padStart(5, "0").split("");
+    const contenitore = document.getElementById("odometro");
+    contenitore.innerHTML = "";
+
+    cifre.forEach((cifraFinale, indice) => {
+      const finestra = document.createElement("div");
+      finestra.className = "cifra-finestra";
+
+      const rullo = document.createElement("div");
+      rullo.className = "rullo";
+      // Il rullo contiene le cifre 0-9 in sequenza: per mostrare la cifra N
+      // basta traslarlo verso l'alto di N * altezza-cifra.
+      for (let n = 0; n <= 9; n++) {
+        const span = document.createElement("span");
+        span.textContent = n;
+        rullo.appendChild(span);
+      }
+      finestra.appendChild(rullo);
+      contenitore.appendChild(finestra);
+
+      // Partiamo dalla cifra 0 e, al frame successivo, traslamo fino alla
+      // cifra reale: questo genera l'effetto "roll" meccanico del
+      // contachilometri, con un piccolo ritardo scaglionato per cifra.
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          const altezza = finestra.getBoundingClientRect().height;
+          rullo.style.transform = `translateY(-${parseInt(cifraFinale, 10) * altezza}px)`;
+        }, indice * 90);
+      });
+    });
+  }
+
+  // --------------------------------------------------------------------
+  // CARICAMENTO DATI
+  // --------------------------------------------------------------------
+
+  function formattaDataBreve(isoData) {
+    const [anno, mese, giorno] = isoData.split("-");
+    return `${giorno}/${mese}`;
+  }
+
+  function formattaDataEstesa(isoData) {
+    const [anno, mese, giorno] = isoData.split("-");
+    const d = new Date(Number(anno), Number(mese) - 1, Number(giorno));
+    return d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  }
+
+  async function caricaDati() {
+    const messaggio = document.getElementById("stato-messaggio");
+    let dati = null;
+
+    try {
+      const risposta = await fetch(URL_API, { cache: "no-store" });
+      if (!risposta.ok) throw new Error("Risposta HTTP " + risposta.status);
+      dati = await risposta.json();
+    } catch (erroreRete) {
+      messaggio.textContent = "Impossibile contattare il Raspberry Pi. Verifica che l'URL di Tailscale Funnel sia corretto e raggiungibile.";
+      messaggio.classList.add("errore");
+      messaggio.style.display = "block";
+      console.error("Errore di comunicazione con il Pi:", erroreRete);
+      return;
+    }
+
+    try {
+      if (!Array.isArray(dati) || dati.length === 0) {
+        messaggio.textContent = "Nessun dato disponibile ancora.";
+        messaggio.style.display = "block";
+        return;
+      }
+
+      messaggio.style.display = "none";
+      messaggio.classList.remove("errore");
+
+      // Indicizziamo tutto il dataset per data, per pescarlo facilmente dal
+      // calendario e per calcolare oggi/record su tutto lo storico e non
+      // solo sugli ultimi 30 giorni mostrati nel grafico.
+      datiPerData = {};
+      dati.forEach((d) => { datiPerData[d.data] = d; });
+
+      dataMinima = dati[0].data;
+      dataOggiStr = dati[dati.length - 1].data;
+
+      // --- Totale ultimi 7 giorni (odometro) ---------------------------
+      const ultimi7 = dati.slice(-7);
+      const totale7 = ultimi7.reduce((somma, d) => somma + d.km, 0);
+      costruisciOdometro(totale7);
+
+      // --- Focus "oggi" --------------------------------------------------
+      const kmOggi = datiPerData[dataOggiStr] ? datiPerData[dataOggiStr].km : 0;
+      document.getElementById("stat-oggi").textContent = kmOggi.toFixed(1) + " km";
+      document.getElementById("puntino-oggi").style.display = kmOggi > 0 ? "block" : "none";
+
+      // --- Focus "record" su tutto lo storico ricevuto -------------------
+      let recordEntry = dati[0];
+      dati.forEach((d) => { if (d.km > recordEntry.km) recordEntry = d; });
+      dataRecord = recordEntry.km > 0 ? recordEntry.data : null;
+      if (dataRecord) {
+        document.getElementById("stat-record").textContent = recordEntry.km.toFixed(1) + " km";
+        document.getElementById("stat-record-data").textContent = formattaDataBreve(dataRecord);
+      } else {
+        document.getElementById("stat-record").textContent = "—";
+        document.getElementById("stat-record-data").textContent = "Nessun dato ancora";
+      }
+
+      document.getElementById("ultimo-aggiornamento").textContent =
+        "Ultimo aggiornamento: " + new Date().toLocaleTimeString("it-IT");
+
+      // --- Grafico ultimi 30 giorni ---------------------------------------
+      const ultimi30 = dati.slice(-30);
+      const etichette = ultimi30.map((d) => formattaDataBreve(d.data));
+      const valori = ultimi30.map((d) => d.km);
+
+      if (typeof Chart !== "undefined") {
+        disegnaGrafico(etichette, valori);
+      } else {
+        throw new Error("Libreria Chart.js mancante o bloccata (AdBlock / Connessione lenta).");
+      }
+
+      // --- Calendario: al primo caricamento apri sul mese di oggi ---------
+      if (!meseVisualizzato) {
+        const [anno, mese] = dataOggiStr.split("-").map(Number);
+        meseVisualizzato = { anno, mese: mese - 1 };
+      }
+      disegnaCalendario();
+
+    } catch (erroreGrafica) {
+      messaggio.textContent = "Dati ricevuti con successo, ma è impossibile mostrare il grafico (Chart.js non caricato).";
+      messaggio.classList.add("errore");
+      messaggio.style.display = "block";
+      console.error("Errore di rendering grafico:", erroreGrafica);
+    }
+  }
+
+  function disegnaGrafico(etichette, valori) {
+    const ctx = document.getElementById("grafico-km").getContext("2d");
+
+    const gradiente = ctx.createLinearGradient(0, 0, 0, 300);
+    gradiente.addColorStop(0, "#ffb000");
+    gradiente.addColorStop(1, "#7a4a00");
+
+    if (graficoCorrente) {
+      graficoCorrente.destroy();
+    }
+
+    graficoCorrente = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: etichette,
+        datasets: [{
+          label: "Km percorsi",
+          data: valori,
+          backgroundColor: gradiente,
+          borderRadius: 3,
+          maxBarThickness: 22,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#0d0f12",
+            borderColor: "#ffb000",
+            borderWidth: 1,
+            titleColor: "#ffb000",
+            bodyColor: "#edeef0",
+            callbacks: {
+              label: (ctx) => `${ctx.parsed.y.toFixed(2)} km`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { color: "#2b313a" },
+            ticks: { color: "#8b93a3", font: { size: 11 } },
+          },
+          y: {
+            beginAtZero: true,
+            grid: { color: "#2b313a" },
+            ticks: { color: "#8b93a3", font: { size: 11 } },
+            title: { display: true, text: "km", color: "#8b93a3" },
+          },
+        },
+      },
+    });
+  }
+
+  // --------------------------------------------------------------------
+  // CALENDARIO INTERATTIVO
+  // --------------------------------------------------------------------
+
+  function isoData(anno, mese, giorno) {
+    // mese: 0-11
+    const mm = String(mese + 1).padStart(2, "0");
+    const gg = String(giorno).padStart(2, "0");
+    return `${anno}-${mm}-${gg}`;
+  }
+
+  function disegnaCalendario() {
+    const { anno, mese } = meseVisualizzato;
+
+    document.getElementById("calendario-mese").textContent =
+      `${MESI_IT[mese]} ${anno}`;
+
+    // Troviamo il km massimo assoluto per calibrare l'intensità colore delle celle
+    const kmMassimoStorico = dataRecord ? datiPerData[dataRecord].km : 0;
+
+    const primoGiornoMese = new Date(anno, mese, 1);
+    const giorniNelMese = new Date(anno, mese + 1, 0).getDate();
+    // getDay(): 0=domenica..6=sabato. Convertiamo a settimana Lun-Dom (0=lunedì).
+    const offsetSettimana = (primoGiornoMese.getDay() + 6) % 7;
+
+    const griglia = document.getElementById("calendario-griglia");
+    griglia.innerHTML = "";
+
+    for (let i = 0; i < offsetSettimana; i++) {
+      const vuota = document.createElement("div");
+      vuota.className = "cella-giorno vuota";
+      griglia.appendChild(vuota);
+    }
+
+    for (let giorno = 1; giorno <= giorniNelMese; giorno++) {
+      const iso = isoData(anno, mese, giorno);
+      const cella = document.createElement("div");
+      cella.className = "cella-giorno";
+      cella.tabIndex = 0;
+
+      const voceDati = datiPerData[iso];
+      const km = voceDati ? voceDati.km : null;
+
+      if (km !== null && km > 0 && kmMassimoStorico > 0) {
+        cella.classList.add("con-dati");
+        const intensita = Math.min(km / kmMassimoStorico, 1);
+        // Interpoliamo tra il colore pannello e l'ambra in base all'intensità
+        const r = Math.round(38 + (255 - 38) * intensita);
+        const g = Math.round(44 + (176 - 44) * intensita);
+        const b = Math.round(52 + (0 - 52) * intensita);
+        cella.style.background = `rgb(${r}, ${g}, ${b})`;
+      }
+
+      if (iso === dataOggiStr) cella.classList.add("oggi");
+      if (iso === dataRecord) cella.classList.add("record-giorno");
+      if (iso < dataMinima || iso > dataOggiStr) {
+        cella.style.opacity = "0.35";
+      }
+
+      const numGiorno = document.createElement("div");
+      numGiorno.className = "num-giorno num";
+      numGiorno.textContent = giorno;
+      cella.appendChild(numGiorno);
+
+      cella.addEventListener("click", () => mostraDettaglioGiorno(iso, cella));
+      cella.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          mostraDettaglioGiorno(iso, cella);
+        }
+      });
+
+      griglia.appendChild(cella);
+    }
+
+    document.getElementById("mese-successivo").disabled =
+      anno === Number(dataOggiStr.split("-")[0]) && mese === Number(dataOggiStr.split("-")[1]) - 1;
+    document.getElementById("mese-precedente").disabled =
+      anno === Number(dataMinima.split("-")[0]) && mese === Number(dataMinima.split("-")[1]) - 1;
+  }
+
+  function mostraDettaglioGiorno(iso, cellaCliccata) {
+    document.querySelectorAll(".cella-giorno.selezionata").forEach((c) => c.classList.remove("selezionata"));
+    cellaCliccata.classList.add("selezionata");
+
+    const voceDati = datiPerData[iso];
+    const pannello = document.getElementById("calendario-dettaglio");
+    pannello.style.display = "block";
+    document.getElementById("dettaglio-data").textContent = formattaDataEstesa(iso);
+    document.getElementById("dettaglio-km").textContent =
+      (voceDati ? voceDati.km : 0).toFixed(2) + " km";
+
+    const velocita = voceDati ? voceDati.velocita_media_kmh : null;
+    document.getElementById("dettaglio-velocita").textContent =
+      velocita !== null && velocita !== undefined
+        ? `Velocità media in movimento: ${velocita} km/h`
+        : "Nessuna velocità media disponibile per questo giorno";
+  }
+
+  document.getElementById("mese-precedente").addEventListener("click", () => {
+    meseVisualizzato.mese -= 1;
+    if (meseVisualizzato.mese < 0) { meseVisualizzato.mese = 11; meseVisualizzato.anno -= 1; }
+    disegnaCalendario();
+  });
+
+  document.getElementById("mese-successivo").addEventListener("click", () => {
+    meseVisualizzato.mese += 1;
+    if (meseVisualizzato.mese > 11) { meseVisualizzato.mese = 0; meseVisualizzato.anno += 1; }
+    disegnaCalendario();
+  });
+
+  caricaDati();
+  setInterval(caricaDati, INTERVALLO_AGGIORNAMENTO_SECONDI * 1000);
+</script>
+
+</body>
+</html>

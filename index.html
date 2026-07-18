@@ -602,7 +602,7 @@
         <div class="etichetta">Streak (&ge;100 km/giorno)</div>
         <div class="valore">
           <span class="fiamma" id="icona-fiamma">🔥</span>
-          <span id="streak-numero">0</span> Giorni
+          <span id="streak-numero">0</span>
         </div>
       </div>
     </div>
@@ -790,9 +790,6 @@
     const scheda = document.getElementById("focus-streak");
     document.getElementById("streak-numero").textContent = giorni;
     scheda.classList.toggle("attivo", giorni > 0);
-
-    const etichettaGiorni = document.getElementById("streak-numero").parentElement;
-    etichettaGiorni.lastChild.textContent = giorni === 1 ? " Giorno" : " Giorni";
   }
 
   async function caricaDati() {

@@ -339,7 +339,7 @@
     box-shadow: 0 0 6px var(--live);
   }
 
-  /* ---------------------------------------------------------------- */
+ /* ---------------------------------------------------------------- */
   /* KM TOTALI STORICI                                                  */
   /* ---------------------------------------------------------------- */
 
@@ -347,12 +347,17 @@
     background: linear-gradient(120deg, var(--pannello-alt), var(--pannello));
     border: 1px solid var(--bordo);
     border-radius: var(--raggio);
-    padding: 20px 28px;
+    
+    /* MODIFICHE: Riquadro più piccolo e centrato */
+    padding: 12px 24px; 
+    margin: 0 auto; 
+    width: fit-content; 
+    
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center; /* Centra gli elementi internamente */
     flex-wrap: wrap;
-    gap: 14px;
+    gap: 20px;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
   }
 
@@ -372,12 +377,23 @@
     font-size: 15px;
   }
 
+  /* NUOVO: Animazione di oscillazione colore e glow */
+  @keyframes pulsa-azzurro {
+    0%, 100% {
+      color: var(--teal); /* Verde acqua originale */
+      text-shadow: 0 0 14px rgba(73, 217, 196, 0.35);
+    }
+    50% {
+      color: #00d4ff; /* Azzurro acceso */
+      text-shadow: 0 0 15px rgba(0, 212, 255, 0.8), 0 0 25px rgba(0, 212, 255, 0.5); /* Glow intermittente */
+    }
+  }
+
   .km-totali-riquadro .valore-totale {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 30px;
+    font-size: 30px; /* La larghezza font resta invariata, come richiesto */
     font-weight: 700;
-    color: var(--teal);
-    text-shadow: 0 0 14px rgba(73,217,196,0.35);
+    animation: pulsa-azzurro 2.5s ease-in-out infinite; /* Gestisce il colore e la pulsazione */
   }
 
   .km-totali-riquadro .valore-totale .unita {
@@ -1240,9 +1256,9 @@
 
   function coloreDaVelocita(velocitaKmh) {
     if (velocitaKmh <= SOGLIA_VELOCITA_BASSA_KMH) return "#49d9c4";  // teal - bassa
-    if (velocitaKmh <= SOGLIA_VELOCITA_MEDIA_KMH) return "#b8960a";  // giallo scuro - media
-    if (velocitaKmh <= SOGLIA_VELOCITA_ALTA_KMH) return "#c85a00";   // arancione scuro - alta
-    return "#ff8080"; // rosso chiaro - full gas (oltre 90)
+    if (velocitaKmh <= SOGLIA_VELOCITA_MEDIA_KMH) return "#ffcd00";  // giallo - media
+    if (velocitaKmh <= SOGLIA_VELOCITA_ALTA_KMH) return "#ff7300";   // arancione  - alta
+    return "##ff0000"; // rosso - full gas (oltre 90)
   }
 
   function inizializzaMappaSeNecessario() {

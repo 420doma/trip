@@ -117,4 +117,4 @@ Open `index.html` and set your backend URL in the `URL_API` and `URL_API_HEATMAP
 Crafted with passion for two wheels by **420Doma**.
 
 ---
-*Ride safe and ride smart! 0🏍️💨*
+*Loud Pipes Save Lifes, Ride safe, Ride or die 0🏍️💨*

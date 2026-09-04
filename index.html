@@ -508,9 +508,9 @@
   }
 
   .mappa-legenda .barretta-colore.bassa    { background: #49d9c4; box-shadow: 0 0 6px rgba(73,217,196,0.5); }
-  .mappa-legenda .barretta-colore.media    { background: #b8960a; box-shadow: 0 0 6px rgba(184,150,10,0.5); }
-  .mappa-legenda .barretta-colore.alta     { background: #c85a00; box-shadow: 0 0 6px rgba(200,90,0,0.5); }
-  .mappa-legenda .barretta-colore.full-gas { background: #ff8080; box-shadow: 0 0 6px rgba(255,128,128,0.5); }
+  .mappa-legenda .barretta-colore.media    { background: #ffcd00; box-shadow: 0 0 6px rgba(184,150,10,0.5); }
+  .mappa-legenda .barretta-colore.alta     { background: #ff7300; box-shadow: 0 0 6px rgba(200,90,0,0.5); }
+  .mappa-legenda .barretta-colore.full-gas { background: #ff0000; box-shadow: 0 0 6px rgba(255,128,128,0.5); }
 
   .mappa-sottotitolo {
     font-size: 11px;
@@ -853,7 +853,7 @@
       <div class="mappa-stato-messaggio" id="mappa-stato-messaggio">Caricamento heatmap in corso&hellip;</div>
     </div>
     <div class="mappa-legenda">
-      <div class="voce-legenda"><span class="barretta-colore bassa"></span>Bassa velocità (fino a 40 km/h)</div>
+      <div class="voce-legenda"><span class="barretta-colore bassa"></span>Velocità bassa (fino a 40 km/h)</div>
       <div class="voce-legenda"><span class="barretta-colore media"></span>Velocità media (fino a 60 km/h)</div>
       <div class="voce-legenda"><span class="barretta-colore alta"></span>Velocità alta (fino a 90 km/h)</div>
       <div class="voce-legenda"><span class="barretta-colore full-gas"></span>Full gas (oltre 90 km/h)</div>
@@ -1258,7 +1258,7 @@
     if (velocitaKmh <= SOGLIA_VELOCITA_BASSA_KMH) return "#49d9c4";  // teal - bassa
     if (velocitaKmh <= SOGLIA_VELOCITA_MEDIA_KMH) return "#ffcd00";  // giallo - media
     if (velocitaKmh <= SOGLIA_VELOCITA_ALTA_KMH) return "#ff7300";   // arancione  - alta
-    return "##ff0000"; // rosso - full gas (oltre 90)
+    return "#ff0000"; // rosso - full gas (oltre 90)
   }
 
   function inizializzaMappaSeNecessario() {

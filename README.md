@@ -76,42 +76,6 @@ The application consists of two main components working seamlessly together:
 
 ---
 
-## 🚀 Installation & Setup
-
-### 1. Prerequisites
-- Python 3.9 or higher
-- Smartphone with the free **Traccar Client** app installed (iOS / Android)
-
-### 2. Backend Setup
-1. Clone the repository to your server or Raspberry Pi:
-   ```bash
-   git clone https://github.com/your-username/420doma-trip.git
-   cd 420doma-trip
-   ```
-
-2. Install required dependencies:
-   ```bash
-   pip install flask flask-cors
-   ```
-
-3. Start the backend server:
-   ```bash
-   python3 app.py
-   ```
-   *The server runs by default on port `1717`.*
-
-### 3. Traccar Client App Configuration
-On your smartphone:
-1. Open **Traccar Client**.
-2. Set the **Server URL** to your backend address:
-   `http://<SERVER_IP>:1717/api/traccar`
-3. Set your preferred location updating frequency (e.g., 10–30 seconds) and start the service.
-
-### 4. Frontend Configuration
-Open `index.html` and set your backend URL in the `URL_API` and `URL_API_HEATMAP` variables. You can host `index.html` on **GitHub Pages**, **Nginx**, **Apache**, or serve it directly.
-
----
-
 ## 👤 Author & Credits
 
 Crafted with passion for two wheels by **420Doma**.

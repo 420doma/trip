@@ -905,7 +905,7 @@
   // coordinate GPS, quindi per non rivelare dove ci si sta spostando in
   // tempo reale viene ricaricata solo ogni 3 ore (in linea con la cadenza di
   // pubblicazione lato server in app.py).
-  const INTERVALLO_AGGIORNAMENTO_MAPPA_SECONDI = 3 * 60 * 60;
+  const INTERVALLO_AGGIORNAMENTO_MAPPA_SECONDI = 20;
 
   let mappaLeaflet = null;      // istanza Leaflet, creata una sola volta
   let layerPercorso = null;     // layer group con tutti i segmenti colorati della heatmap

@@ -1398,13 +1398,18 @@
   // nessuna richiesta.
   //
   // CACHE LOCALE
-  // Una singola richiesta a Overpass non scarica solo la strada del punto
-  // cliccato, ma TUTTE le strade (con tag e geometria) in un raggio piu' ampio
-  // (RAGGIO_CACHE_AREA_METRI). Ogni strada viene salvata in `cacheLimiti`,
-  // indicizzata per id OSM, insieme alla sua geometria. Il click successivo su
-  // un punto qualsiasi lungo la stessa strada (o in una strada vicina gia'
-  // scaricata) trova il risultato in cache calcolando la strada piu' vicina
-  // al punto: risposta istantanea, nessuna richiesta di rete.
+  // La query a Overpass e' volutamente leggera: solo le strade che hanno gia'
+  // il tag maxspeed, in un raggio molto piccolo attorno al punto cliccato
+  // (RAGGIO_CACHE_AREA_METRI), con i soli tag essenziali e la geometria.
+  // Ogni strada viene salvata in `cacheLimiti`, indicizzata per id OSM,
+  // insieme alla sua geometria. Il click successivo su un punto lungo la
+  // stessa strada (entro l'area gia' scaricata) trova il risultato in cache
+  // calcolando la strada piu' vicina al punto: risposta istantanea, nessuna
+  // richiesta di rete.
+  //
+  // GESTIONE ERRORI: se Overpass va in timeout o risponde con errori (502,
+  // ecc.) l'eccezione viene gestita in silenzio: il popup mostra "N/D" e non
+  // viene scritto nulla nella console da questo codice.
   // Anche le AREE gia' scaricate vengono ricordate (`areeScaricate`): se in
   // quell'area non c'era nessuna strada vicina al punto, anche "N/D" viene
   // risolto subito senza rete.
@@ -1416,9 +1421,9 @@
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
   ];
-  const TIMEOUT_RICHIESTA_OVERPASS_MS = 9000;
+  const TIMEOUT_RICHIESTA_OVERPASS_MS = 20000;
   const RAGGIO_RICERCA_STRADA_METRI = 15;   // distanza massima punto -> strada
-  const RAGGIO_CACHE_AREA_METRI = 120;      // area scaricata con ogni richiesta
+  const RAGGIO_CACHE_AREA_METRI = 35;       // area scaricata con ogni richiesta (query leggera)
 
   const cacheLimiti = {};        // idWay -> { limite: "50" | "none" | null, geometria: [[lat, lon], ...] }
   const areeScaricate = [];      // [{ lat, lon, raggio }] aree gia' interamente scaricate
@@ -1506,8 +1511,8 @@
         if (!risposta.ok) throw new Error("Overpass HTTP " + risposta.status);
         return await risposta.json();
       } catch (errore) {
+        // Silenzioso: timeout/AbortError/502 -> si prova il server successivo.
         ultimoErrore = errore;
-        console.warn("Overpass non disponibile su " + url + ":", errore);
       } finally {
         clearTimeout(timer);
       }
@@ -1515,11 +1520,11 @@
     throw ultimoErrore || new Error("Overpass non raggiungibile");
   }
 
-  // Scarica (con una sola richiesta) tutte le strade nell'area attorno al
-  // punto e le salva in cache.
+  // Scarica (con una sola richiesta leggera) le strade con maxspeed nel
+  // piccolo raggio attorno al punto e le salva in cache.
   async function scaricaAreaInCache(lat, lon) {
     const query =
-      `[out:json][timeout:10];way(around:${RAGGIO_CACHE_AREA_METRI},${lat},${lon})["highway"];out tags geom;`;
+      `[out:json][timeout:15];way(around:${RAGGIO_CACHE_AREA_METRI},${lat},${lon})["highway"]["maxspeed"];out tags geom;`;
     const dati = await fetchOverpassConFallback(query);
     const elementi = Array.isArray(dati.elements) ? dati.elements : [];
     for (const el of elementi) {
@@ -1603,10 +1608,9 @@
           if (!popup.isOpen()) return;
           popup.setContent(htmlPopupPunto(velocitaKmh, htmlRigaLimite(valore)));
         })
-        .catch((errore) => {
-          // Errore di rete: NON si salva nulla in cache, cosi' al prossimo
-          // click si riprova.
-          console.error("Errore richiesta limite di velocità:", errore);
+        .catch(() => {
+          // Errore di rete (timeout, 502, ...): gestito in silenzio. Non si
+          // salva nulla in cache, cosi' al prossimo click si riprova.
           if (!popup.isOpen()) return;
           popup.setContent(htmlPopupPunto(velocitaKmh, htmlRigaLimite("N/D")));
         });

@@ -1292,17 +1292,18 @@
     return "#ff0000"; // rosso - full gas (oltre 90)
   }
 
-  function inizializzaMappaSeNecessario() {
+function inizializzaMappaSeNecessario() {
     if (mappaLeaflet || typeof L === "undefined") return;
 
     mappaLeaflet = L.map("mappa-percorso", {
       zoomControl: true,
       attributionControl: true,
-    }).setView([41.9028, 12.4964], 6); // vista iniziale neutra (Italia), verrà ricentrata sui dati
+    }).setView([41.9028, 12.4964], 6);
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    // --- SOSTITUISCI QUESTA RIGA CON LA SATELLITARE ---
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      attribution: "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
     }).addTo(mappaLeaflet);
 
     layerPercorso = L.layerGroup().addTo(mappaLeaflet);
@@ -1416,7 +1417,7 @@
   let layerGiorno = null;        // layer group con segmenti e punti del giorno selezionato
   let tokenRichiestaGiorno = 0;  // evita che una risposta lenta sovrascriva un click più recente
 
-  function inizializzaMappaGiornoSeNecessario() {
+function inizializzaMappaGiornoSeNecessario() {
     if (mappaGiorno || typeof L === "undefined") return;
 
     mappaGiorno = L.map("mappa-giorno", {
@@ -1424,9 +1425,10 @@
       attributionControl: true,
     }).setView([41.9028, 12.4964], 6);
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    // --- SOSTITUISCI CON LA SATELLITARE ESRI ---
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      attribution: "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
     }).addTo(mappaGiorno);
 
     layerGiorno = L.layerGroup().addTo(mappaGiorno);

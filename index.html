@@ -640,6 +640,35 @@
   /* GRAFICO                                                           */
   /* ---------------------------------------------------------------- */
 
+  /* Pulsante "Scarica Grafica Strava" sotto la mappa giornaliera */
+  .azioni-mappa-giorno {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .btn-strava {
+    background: linear-gradient(180deg, #ff7a1a, #fc4c02);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 11px 18px;
+    font-family: 'Rajdhani', 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: filter 0.15s, transform 0.12s;
+  }
+
+  .btn-strava:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-strava:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-strava:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+  .strava-stato { font-size: 12px; color: var(--testo-muto); }
+
   section.pannello-sezione {
     background: var(--pannello);
     border: 1px solid var(--bordo);
@@ -997,6 +1026,10 @@
     <div class="mappa-contenitore">
       <div id="mappa-giorno"></div>
       <div class="mappa-stato-messaggio" id="mappa-giorno-stato-messaggio">Tocca un giorno nel calendario per mostrare il percorso.</div>
+    </div>
+    <div class="azioni-mappa-giorno">
+      <button class="btn-strava" id="btn-scarica-strava" type="button" disabled>📥 Scarica Grafica Strava</button>
+      <span class="strava-stato" id="strava-stato">PNG quadrato 1080×1080 con sfondo trasparente.</span>
     </div>
     <div class="mappa-legenda">
       <div class="voce-legenda"><span class="barretta-colore bassa"></span>Velocità bassa (fino a 40 km/h)</div>
@@ -1888,6 +1921,7 @@ function inizializzaMappaGiornoSeNecessario() {
     }
 
     layerGiorno.clearLayers();
+    impostaDatiGraficaStrava(null);
     sottotitolo.textContent = `${titoloGiorno} — caricamento percorso…`;
     statoMessaggio.textContent = "Caricamento percorso in corso…";
     statoMessaggio.style.display = "flex";
@@ -1936,6 +1970,7 @@ function inizializzaMappaGiornoSeNecessario() {
         }
       }
 
+      impostaDatiGraficaStrava(iso, tracce);
       mappaGiorno.invalidateSize();
       mappaGiorno.fitBounds(confini, { padding: [24, 24], maxZoom: 15 });
 
@@ -1950,6 +1985,683 @@ function inizializzaMappaGiornoSeNecessario() {
       console.error("Errore di caricamento mappa giornaliera:", erroreGiorno);
     }
   }
+
+  // --------------------------------------------------------------------
+  // GRAFICA STILE STRAVA (PNG quadrato, sfondo trasparente) - 100% LOCALE
+  // --------------------------------------------------------------------
+  // Tutto viene calcolato e disegnato su un <canvas> nascosto, SENZA alcuna
+  // richiesta di rete (nessuna chiamata a Overpass o ad altri servizi): la
+  // grafica si genera in pochi millisecondi anche offline. Il canvas non
+  // viene mai riempito: il PNG resta trasparente.
+  //
+  // Ingredienti, tutti incorporati nello script:
+  //   - COSTE_LOCALI : contorni costieri/lacustri (Maiorca, Sa Dragonera,
+  //                    Lago Maggiore, Lago di Varese) come liste di [lat, lon].
+  //                    Per aggiungere una nuova zona basta aggiungere un
+  //                    elemento { nome, pts: [[lat, lon], ...] }.
+  //   - PAESI_LOCALI : database [nome, lat, lon, peso] dei paesi. Il "peso"
+  //                    (abitanti approssimativi, in migliaia) serve solo a
+  //                    decidere quali etichette tenere se ce ne sono troppe.
+  //                    Per aggiungere un paese basta aggiungere una riga.
+  //   - Filtro dinamico: per ogni giorno si mostrano solo i paesi che il
+  //                    tragitto sfiora (RAGGIO_PAESI_KM dal punto piu' vicino).
+
+  const DIMENSIONE_GRAFICA_STRAVA = 1080;
+  const AREA_TRACCIA_GRAFICA = { x: 90, y: 70, w: 900, h: 650 };
+  const RAGGIO_PAESI_KM = 3;          // un paese compare solo se il percorso passa entro questa distanza
+  const RAGGIO_PAESI_ESTREMI_KM = 6;  // partenza e arrivo: si mostra il paese piu' vicino entro questa distanza
+  const MAX_PAESI_GRAFICA = 9;        // massimo numero di etichette sul PNG
+const FONT_PAESI_GRAFICA = '600 27px Inter, "Segoe UI", sans-serif';
+
+  // Contorni (chiusi) in coordinate [lat, lon]. Vertici scritti a mano e
+  // semplificati: ottimi come contesto grafico, non come cartografia di precisione.
+  const COSTE_LOCALI = [
+    {
+      nome: "Maiorca",
+      pts: [
+        // Contorno fluido ricavato dalla cartografia di riferimento: 620 vertici, partenza da Palma verso est (senso antiorario)
+        [39.5570, 2.6415], [39.5620, 2.6416], [39.5641, 2.6473], [39.5644, 2.6538], [39.5640, 2.6603], [39.5626, 2.6665],
+        [39.5604, 2.6724], [39.5580, 2.6781], [39.5549, 2.6832], [39.5508, 2.6871], [39.5471, 2.6915], [39.5440, 2.6966],
+        [39.5409, 2.7017], [39.5377, 2.7067], [39.5364, 2.7129], [39.5349, 2.7192], [39.5319, 2.7244], [39.5284, 2.7290],
+        [39.5244, 2.7330], [39.5199, 2.7360], [39.5151, 2.7374], [39.5105, 2.7349], [39.5063, 2.7315], [39.5015, 2.7293],
+        [39.4971, 2.7263], [39.4933, 2.7220], [39.4892, 2.7182], [39.4843, 2.7169], [39.4793, 2.7176], [39.4747, 2.7201],
+        [39.4703, 2.7234], [39.4663, 2.7272], [39.4619, 2.7305], [39.4573, 2.7332], [39.4524, 2.7343], [39.4474, 2.7345],
+        [39.4424, 2.7339], [39.4376, 2.7320], [39.4327, 2.7305], [39.4277, 2.7301], [39.4226, 2.7305], [39.4178, 2.7322],
+        [39.4133, 2.7350], [39.4091, 2.7387], [39.4054, 2.7431], [39.4018, 2.7477], [39.3983, 2.7524], [39.3947, 2.7570],
+        [39.3911, 2.7615], [39.3871, 2.7654], [39.3828, 2.7688], [39.3789, 2.7730], [39.3753, 2.7776], [39.3719, 2.7823],
+        [39.3693, 2.7878], [39.3689, 2.7943], [39.3690, 2.8008], [39.3680, 2.8072], [39.3661, 2.8133], [39.3649, 2.8196],
+        [39.3649, 2.8261], [39.3660, 2.8325], [39.3686, 2.8380], [39.3703, 2.8440], [39.3693, 2.8504], [39.3684, 2.8568],
+        [39.3682, 2.8633], [39.3685, 2.8698], [39.3690, 2.8763], [39.3684, 2.8828], [39.3666, 2.8888], [39.3643, 2.8947],
+        [39.3623, 2.9007], [39.3616, 2.9071], [39.3626, 2.9134], [39.3659, 2.9183], [39.3684, 2.9239], [39.3690, 2.9304],
+        [39.3684, 2.9369], [39.3680, 2.9434], [39.3671, 2.9498], [39.3645, 2.9553], [39.3610, 2.9600], [39.3574, 2.9647],
+        [39.3538, 2.9692], [39.3499, 2.9732], [39.3450, 2.9739], [39.3401, 2.9722], [39.3351, 2.9715], [39.3301, 2.9721],
+        [39.3257, 2.9751], [39.3233, 2.9806], [39.3225, 2.9871], [39.3218, 2.9936], [39.3195, 2.9992], [39.3151, 3.0023],
+        [39.3102, 3.0036], [39.3055, 3.0058], [39.3016, 3.0099], [39.2980, 3.0145], [39.2945, 3.0191], [39.2909, 3.0237],
+        [39.2871, 3.0279], [39.2828, 3.0313], [39.2787, 3.0352], [39.2755, 3.0402], [39.2739, 3.0463], [39.2737, 3.0528],
+        [39.2744, 3.0593], [39.2764, 3.0652], [39.2790, 3.0708], [39.2828, 3.0750], [39.2871, 3.0785], [39.2909, 3.0827],
+        [39.2945, 3.0873], [39.2983, 3.0916], [39.3026, 3.0950], [39.3067, 3.0988], [39.3103, 3.1033], [39.3139, 3.1079],
+        [39.3174, 3.1126], [39.3206, 3.1176], [39.3225, 3.1237], [39.3244, 3.1297], [39.3276, 3.1348], [39.3308, 3.1398],
+        [39.3326, 3.1458], [39.3331, 3.1523], [39.3339, 3.1588], [39.3358, 3.1648], [39.3382, 3.1705], [39.3415, 3.1755],
+        [39.3451, 3.1801], [39.3491, 3.1840], [39.3534, 3.1874], [39.3572, 3.1917], [39.3602, 3.1969], [39.3625, 3.2027],
+        [39.3643, 3.2088], [39.3658, 3.2150], [39.3680, 3.2209], [39.3707, 3.2263], [39.3747, 3.2303], [39.3792, 3.2333],
+        [39.3837, 3.2362], [39.3882, 3.2392], [39.3927, 3.2420], [39.3974, 3.2442], [39.4022, 3.2462], [39.4068, 3.2490],
+        [39.4113, 3.2519], [39.4157, 3.2551], [39.4193, 3.2596], [39.4220, 3.2651], [39.4256, 3.2695], [39.4304, 3.2713],
+        [39.4354, 3.2716], [39.4405, 3.2716], [39.4455, 3.2717], [39.4505, 3.2717], [39.4555, 3.2719], [39.4605, 3.2729],
+        [39.4653, 3.2750], [39.4702, 3.2763], [39.4751, 3.2777], [39.4797, 3.2804], [39.4843, 3.2831], [39.4890, 3.2853],
+        [39.4938, 3.2873], [39.4985, 3.2894], [39.5033, 3.2914], [39.5079, 3.2942], [39.5122, 3.2976], [39.5159, 3.3019],
+        [39.5195, 3.3065], [39.5231, 3.3112], [39.5266, 3.3158], [39.5302, 3.3204], [39.5337, 3.3250], [39.5373, 3.3296],
+        [39.5412, 3.3337], [39.5452, 3.3377], [39.5482, 3.3429], [39.5513, 3.3481], [39.5540, 3.3536], [39.5568, 3.3590],
+        [39.5604, 3.3636], [39.5649, 3.3664], [39.5698, 3.3673], [39.5748, 3.3686], [39.5778, 3.3733], [39.5786, 3.3797],
+        [39.5794, 3.3862], [39.5823, 3.3915], [39.5869, 3.3938], [39.5919, 3.3933], [39.5954, 3.3891], [39.5975, 3.3831],
+        [39.6011, 3.3787], [39.6060, 3.3786], [39.6106, 3.3812], [39.6152, 3.3838], [39.6201, 3.3853], [39.6250, 3.3866],
+        [39.6296, 3.3893], [39.6333, 3.3936], [39.6344, 3.3999], [39.6346, 3.4064], [39.6347, 3.4130], [39.6352, 3.4194],
+        [39.6377, 3.4249], [39.6424, 3.4273], [39.6471, 3.4297], [39.6518, 3.4320], [39.6552, 3.4365], [39.6578, 3.4421],
+        [39.6625, 3.4442], [39.6675, 3.4446], [39.6726, 3.4446], [39.6776, 3.4449], [39.6825, 3.4463], [39.6873, 3.4482],
+        [39.6923, 3.4486], [39.6972, 3.4472], [39.7022, 3.4464], [39.7062, 3.4501], [39.7084, 3.4559], [39.7110, 3.4614],
+        [39.7153, 3.4649], [39.7201, 3.4663], [39.7249, 3.4648], [39.7284, 3.4602], [39.7309, 3.4545], [39.7344, 3.4500],
+        [39.7393, 3.4487], [39.7443, 3.4490], [39.7493, 3.4489], [39.7542, 3.4475], [39.7567, 3.4421], [39.7567, 3.4357],
+        [39.7554, 3.4293], [39.7558, 3.4230], [39.7585, 3.4175], [39.7606, 3.4116], [39.7624, 3.4054], [39.7654, 3.4002],
+        [39.7687, 3.3953], [39.7708, 3.3894], [39.7714, 3.3829], [39.7721, 3.3765], [39.7744, 3.3707], [39.7777, 3.3659],
+        [39.7812, 3.3612], [39.7843, 3.3560], [39.7870, 3.3505], [39.7906, 3.3460], [39.7948, 3.3424], [39.7981, 3.3375],
+        [39.7986, 3.3311], [39.7965, 3.3253], [39.7932, 3.3204], [39.7894, 3.3161], [39.7849, 3.3134], [39.7799, 3.3126],
+        [39.7749, 3.3116], [39.7706, 3.3084], [39.7678, 3.3030], [39.7655, 3.2972], [39.7632, 3.2914], [39.7609, 3.2856],
+        [39.7582, 3.2801], [39.7549, 3.2752], [39.7518, 3.2701], [39.7494, 3.2643], [39.7476, 3.2582], [39.7467, 3.2518],
+        [39.7454, 3.2455], [39.7440, 3.2393], [39.7435, 3.2328], [39.7441, 3.2263], [39.7462, 3.2204], [39.7490, 3.2150],
+        [39.7507, 3.2088], [39.7529, 3.2030], [39.7562, 3.1981], [39.7593, 3.1930], [39.7618, 3.1873], [39.7637, 3.1813],
+        [39.7652, 3.1750], [39.7672, 3.1690], [39.7696, 3.1633], [39.7726, 3.1581], [39.7753, 3.1525], [39.7781, 3.1472],
+        [39.7816, 3.1424], [39.7851, 3.1378], [39.7887, 3.1332], [39.7925, 3.1289], [39.7968, 3.1255], [39.8013, 3.1225],
+        [39.8058, 3.1197], [39.8106, 3.1177], [39.8156, 3.1170], [39.8206, 3.1170], [39.8256, 3.1177], [39.8294, 3.1213],
+        [39.8289, 3.1278], [39.8292, 3.1342], [39.8305, 3.1405], [39.8311, 3.1470], [39.8317, 3.1535], [39.8333, 3.1597],
+        [39.8349, 3.1659], [39.8370, 3.1718], [39.8404, 3.1765], [39.8445, 3.1802], [39.8488, 3.1837], [39.8529, 3.1876],
+        [39.8573, 3.1907], [39.8621, 3.1925], [39.8668, 3.1906], [39.8711, 3.1874], [39.8760, 3.1879], [39.8800, 3.1918],
+        [39.8838, 3.1960], [39.8886, 3.1979], [39.8934, 3.1962], [39.8965, 3.1912], [39.8974, 3.1848], [39.8972, 3.1783],
+        [39.8957, 3.1722], [39.8925, 3.1671], [39.8890, 3.1624], [39.8857, 3.1575], [39.8831, 3.1519], [39.8811, 3.1459],
+        [39.8796, 3.1397], [39.8779, 3.1335], [39.8768, 3.1272], [39.8758, 3.1208], [39.8742, 3.1146], [39.8727, 3.1084],
+        [39.8707, 3.1024], [39.8693, 3.0961], [39.8713, 3.0903], [39.8752, 3.0862], [39.8797, 3.0832], [39.8845, 3.0812],
+        [39.8895, 3.0806], [39.8945, 3.0806], [39.8995, 3.0814], [39.9030, 3.0853], [39.9014, 3.0913], [39.8989, 3.0969],
+        [39.8982, 3.1034], [39.8996, 3.1095], [39.9039, 3.1126], [39.9084, 3.1156], [39.9122, 3.1198], [39.9159, 3.1243],
+        [39.9187, 3.1296], [39.9190, 3.1361], [39.9192, 3.1426], [39.9206, 3.1489], [39.9228, 3.1548], [39.9250, 3.1606],
+        [39.9275, 3.1663], [39.9305, 3.1715], [39.9331, 3.1772], [39.9352, 3.1831], [39.9367, 3.1893], [39.9392, 3.1949],
+        [39.9432, 3.1988], [39.9474, 3.2023], [39.9515, 3.2062], [39.9560, 3.2092], [39.9608, 3.2107], [39.9652, 3.2079],
+        [39.9672, 3.2020], [39.9672, 3.1955], [39.9655, 3.1894], [39.9638, 3.1833], [39.9643, 3.1769], [39.9662, 3.1708],
+        [39.9673, 3.1645], [39.9671, 3.1580], [39.9654, 3.1518], [39.9632, 3.1459], [39.9613, 3.1399], [39.9598, 3.1337],
+        [39.9572, 3.1281], [39.9543, 3.1227], [39.9516, 3.1173], [39.9475, 3.1135], [39.9429, 3.1109], [39.9403, 3.1056],
+        [39.9398, 3.0991], [39.9397, 3.0926], [39.9396, 3.0860], [39.9388, 3.0796], [39.9364, 3.0739], [39.9339, 3.0683],
+        [39.9341, 3.0618], [39.9370, 3.0567], [39.9393, 3.0510], [39.9403, 3.0446], [39.9416, 3.0383], [39.9417, 3.0318],
+        [39.9404, 3.0255], [39.9397, 3.0190], [39.9391, 3.0126], [39.9374, 3.0064], [39.9352, 3.0005], [39.9329, 2.9947],
+        [39.9302, 2.9893], [39.9262, 2.9853], [39.9221, 2.9815], [39.9196, 2.9760], [39.9191, 2.9696], [39.9202, 2.9632],
+        [39.9223, 2.9573], [39.9244, 2.9513], [39.9253, 2.9449], [39.9247, 2.9385], [39.9222, 2.9329], [39.9185, 2.9285],
+        [39.9142, 2.9250], [39.9104, 2.9208], [39.9083, 2.9149], [39.9068, 2.9087], [39.9052, 2.9025], [39.9043, 2.8960],
+        [39.9027, 2.8899], [39.8997, 2.8846], [39.8971, 2.8791], [39.8939, 2.8740], [39.8897, 2.8704], [39.8859, 2.8662],
+        [39.8840, 2.8602], [39.8831, 2.8538], [39.8810, 2.8479], [39.8777, 2.8429], [39.8747, 2.8378], [39.8729, 2.8317],
+        [39.8712, 2.8255], [39.8694, 2.8194], [39.8687, 2.8130], [39.8691, 2.8065], [39.8689, 2.8000], [39.8665, 2.7943],
+        [39.8636, 2.7891], [39.8627, 2.7827], [39.8623, 2.7762], [39.8612, 2.7699], [39.8574, 2.7656], [39.8530, 2.7625],
+        [39.8485, 2.7596], [39.8441, 2.7564], [39.8413, 2.7512], [39.8409, 2.7447], [39.8405, 2.7382], [39.8381, 2.7325],
+        [39.8353, 2.7272], [39.8327, 2.7216], [39.8297, 2.7163], [39.8276, 2.7104], [39.8253, 2.7046], [39.8218, 2.6999],
+        [39.8188, 2.6947], [39.8151, 2.6904], [39.8108, 2.6868], [39.8076, 2.6818], [39.8060, 2.6757], [39.8036, 2.6700],
+        [39.8002, 2.6651], [39.7965, 2.6608], [39.7920, 2.6580], [39.7870, 2.6568], [39.7823, 2.6545], [39.7786, 2.6502],
+        [39.7759, 2.6448], [39.7748, 2.6384], [39.7735, 2.6321], [39.7702, 2.6272], [39.7662, 2.6233], [39.7626, 2.6187],
+        [39.7581, 2.6159], [39.7537, 2.6128], [39.7506, 2.6077], [39.7479, 2.6022], [39.7444, 2.5975], [39.7402, 2.5938],
+        [39.7360, 2.5903], [39.7320, 2.5864], [39.7279, 2.5825], [39.7248, 2.5774], [39.7217, 2.5723], [39.7182, 2.5676],
+        [39.7148, 2.5628], [39.7125, 2.5570], [39.7119, 2.5506], [39.7118, 2.5440], [39.7117, 2.5375], [39.7112, 2.5310],
+        [39.7093, 2.5250], [39.7061, 2.5201], [39.7029, 2.5150], [39.7003, 2.5094], [39.6974, 2.5041], [39.6944, 2.4988],
+        [39.6910, 2.4941], [39.6871, 2.4900], [39.6838, 2.4850], [39.6804, 2.4803], [39.6763, 2.4765], [39.6726, 2.4721],
+        [39.6690, 2.4675], [39.6657, 2.4626], [39.6633, 2.4569], [39.6616, 2.4508], [39.6590, 2.4452], [39.6562, 2.4398],
+        [39.6538, 2.4340], [39.6515, 2.4283], [39.6483, 2.4233], [39.6441, 2.4197], [39.6403, 2.4155], [39.6376, 2.4099],
+        [39.6353, 2.4041], [39.6328, 2.3985], [39.6299, 2.3932], [39.6281, 2.3871], [39.6275, 2.3806], [39.6267, 2.3742],
+        [39.6242, 2.3686], [39.6207, 2.3639], [39.6169, 2.3596], [39.6126, 2.3561], [39.6085, 2.3525], [39.6042, 2.3491],
+        [39.5992, 2.3480], [39.5942, 2.3479], [39.5892, 2.3486], [39.5843, 2.3503], [39.5794, 2.3502], [39.5745, 2.3488],
+        [39.5695, 2.3497], [39.5655, 2.3535], [39.5619, 2.3580], [39.5582, 2.3626], [39.5540, 2.3660], [39.5491, 2.3664],
+        [39.5443, 2.3644], [39.5394, 2.3637], [39.5359, 2.3681], [39.5337, 2.3740], [39.5319, 2.3801], [39.5287, 2.3851],
+        [39.5265, 2.3908], [39.5260, 2.3973], [39.5262, 2.4038], [39.5273, 2.4102], [39.5282, 2.4166], [39.5271, 2.4229],
+        [39.5268, 2.4294], [39.5283, 2.4356], [39.5305, 2.4415], [39.5326, 2.4474], [39.5334, 2.4538], [39.5311, 2.4593],
+        [39.5262, 2.4604], [39.5214, 2.4588], [39.5165, 2.4574], [39.5115, 2.4573], [39.5065, 2.4586], [39.5020, 2.4615],
+        [39.4983, 2.4658], [39.4952, 2.4709], [39.4909, 2.4742], [39.4859, 2.4750], [39.4809, 2.4752], [39.4759, 2.4757],
+        [39.4715, 2.4785], [39.4708, 2.4848], [39.4717, 2.4912], [39.4702, 2.4972], [39.4669, 2.5021], [39.4645, 2.5078],
+        [39.4632, 2.5140], [39.4629, 2.5206], [39.4633, 2.5271], [39.4657, 2.5326], [39.4705, 2.5341], [39.4755, 2.5349],
+        [39.4803, 2.5368], [39.4849, 2.5397], [39.4890, 2.5433], [39.4933, 2.5466], [39.4983, 2.5478], [39.5033, 2.5481],
+        [39.5083, 2.5490], [39.5128, 2.5517], [39.5170, 2.5553], [39.5218, 2.5570], [39.5268, 2.5584], [39.5308, 2.5622],
+        [39.5334, 2.5677], [39.5354, 2.5737], [39.5363, 2.5801], [39.5365, 2.5866], [39.5367, 2.5932], [39.5381, 2.5993],
+        [39.5423, 2.6027], [39.5468, 2.6058], [39.5491, 2.6114], [39.5483, 2.6177], [39.5473, 2.6241], [39.5473, 2.6307],
+        [39.5485, 2.6369], [39.5521, 2.6413],
+      ],
+    },
+    {
+      nome: "Sa Dragonera",
+      pts: [
+        [39.5880, 2.3190], [39.5920, 2.3100], [39.5980, 2.3020], [39.6030, 2.3000],
+        [39.6050, 2.3040], [39.6010, 2.3130], [39.5950, 2.3230], [39.5900, 2.3260],
+      ],
+    },
+    {
+      nome: "Lago Maggiore (sud)",
+      pts: [
+        [45.7275, 8.6355], [45.7330, 8.6180], [45.7420, 8.5950], [45.7500, 8.5750], [45.7570, 8.5590],
+        [45.7680, 8.5480], [45.7850, 8.5330], [45.8050, 8.5320], [45.8250, 8.5520], [45.8450, 8.5600],
+        [45.8650, 8.5420], [45.8830, 8.5330], [45.9100, 8.5050], [45.9300, 8.5650], [45.9100, 8.6000],
+        [45.9000, 8.6160], [45.8800, 8.6280], [45.8600, 8.6300], [45.8400, 8.6250], [45.8200, 8.6170],
+        [45.8040, 8.6000], [45.7900, 8.5900], [45.7760, 8.5870], [45.7600, 8.5950], [45.7450, 8.6080],
+        [45.7340, 8.6280],
+      ],
+    },
+    {
+      nome: "Lago di Varese",
+      pts: [
+        [45.8460, 8.7200], [45.8400, 8.7300], [45.8300, 8.7450], [45.8180, 8.7480], [45.8040, 8.7370],
+        [45.7950, 8.7240], [45.8020, 8.7140], [45.8150, 8.7130], [45.8290, 8.7110], [45.8400, 8.7090],
+      ],
+    },
+  ];
+
+  // Bounding box precalcolato di ogni contorno (serve a scartare al volo
+  // quelli lontani dal tragitto).
+  COSTE_LOCALI.forEach((c) => {
+    c.bbox = { minLat: Infinity, maxLat: -Infinity, minLon: Infinity, maxLon: -Infinity };
+    for (const [lat, lon] of c.pts) {
+      if (lat < c.bbox.minLat) c.bbox.minLat = lat;
+      if (lat > c.bbox.maxLat) c.bbox.maxLat = lat;
+      if (lon < c.bbox.minLon) c.bbox.minLon = lon;
+      if (lon > c.bbox.maxLon) c.bbox.maxLon = lon;
+    }
+  });
+
+  // [nome, lat, lon, peso (abitanti approssimativi, migliaia)]
+  const PAESI_LOCALI = [
+    // --- Maiorca
+    ["Palma", 39.5696, 2.6502, 420],
+    ["Calvià", 39.5659, 2.5063, 50],
+    ["Magaluf", 39.5086, 2.5339, 4],
+    ["Palmanova", 39.5253, 2.5272, 3],
+    ["Santa Ponça", 39.5100, 2.4750, 5],
+    ["Peguera", 39.5364, 2.4519, 4],
+    ["Andratx", 39.5772, 2.4186, 12],
+    ["Port d'Andratx", 39.5439, 2.3892, 5],
+    ["Sant Elm", 39.5783, 2.3558, 1],
+    ["Estellencs", 39.6528, 2.4806, 1],
+    ["Banyalbufar", 39.6875, 2.5283, 1],
+    ["Esporles", 39.6692, 2.5750, 5],
+    ["Puigpunyent", 39.6439, 2.5239, 2],
+    ["Valldemossa", 39.7117, 2.6222, 2],
+    ["Deià", 39.7483, 2.6458, 1],
+    ["Sóller", 39.7667, 2.7153, 14],
+    ["Port de Sóller", 39.7956, 2.6928, 5],
+    ["Fornalutx", 39.7742, 2.7458, 1],
+    ["Bunyola", 39.6969, 2.7094, 6],
+    ["Alaró", 39.7053, 2.7914, 5],
+    ["Santa Maria del Camí", 39.6469, 2.7747, 7],
+    ["Consell", 39.6764, 2.8217, 4],
+    ["Binissalem", 39.6872, 2.8433, 8],
+    ["Lloseta", 39.7144, 2.8631, 6],
+    ["Inca", 39.7203, 2.9111, 32],
+    ["Selva", 39.7547, 2.9097, 4],
+    ["Sencelles", 39.6483, 2.9017, 3],
+    ["Campanet", 39.7683, 2.9656, 3],
+    ["Llubí", 39.6958, 3.0014, 2],
+    ["Lluc", 39.8225, 2.8867, 1],
+    ["Sa Calobra", 39.8517, 2.8000, 1],
+    ["Pollença", 39.8767, 3.0167, 16],
+    ["Port de Pollença", 39.9047, 3.0836, 6],
+    ["Cala Sant Vicenç", 39.9220, 3.0700, 1],
+    ["Cap de Formentor", 39.9627, 3.2127, 1],
+    ["Alcúdia", 39.8514, 3.1214, 20],
+    ["Port d'Alcúdia", 39.8383, 3.1469, 5],
+    ["Sa Pobla", 39.7681, 3.0222, 13],
+    ["Muro", 39.7342, 3.0580, 7],
+    ["Can Picafort", 39.7667, 3.1531, 3],
+    ["Santa Margalida", 39.7028, 3.0972, 12],
+    ["Maria de la Salut", 39.6694, 3.0653, 2],
+    ["Sineu", 39.6439, 3.0106, 4],
+    ["Ariany", 39.6522, 3.1272, 1],
+    ["Petra", 39.6144, 3.1128, 3],
+    ["Sant Joan", 39.5925, 3.0522, 2],
+    ["Colònia de Sant Pere", 39.7692, 3.2630, 1],
+    ["Artà", 39.6950, 3.3503, 8],
+    ["Capdepera", 39.7019, 3.4361, 11],
+    ["Cala Rajada", 39.7122, 3.4603, 5],
+    ["Son Servera", 39.6208, 3.3586, 11],
+    ["Cala Millor", 39.5983, 3.3850, 6],
+    ["Sant Llorenç des Cardassar", 39.6256, 3.2858, 8],
+    ["Porto Cristo", 39.5439, 3.3358, 6],
+    ["Manacor", 39.5697, 3.2097, 42],
+    ["Felanitx", 39.4694, 3.1481, 18],
+    ["Porto Colom", 39.4256, 3.2639, 4],
+    ["Cala d'Or", 39.3720, 3.2264, 4],
+    ["Santanyí", 39.3544, 3.1297, 11],
+    ["Cala Figuera", 39.3269, 3.1633, 1],
+    ["Ses Salines", 39.3361, 3.0528, 5],
+    ["Colònia de Sant Jordi", 39.3155, 3.0042, 3],
+    ["Campos", 39.4297, 3.0158, 10],
+    ["Sa Ràpita", 39.3697, 2.9519, 6],
+    ["Porreres", 39.5156, 3.0197, 5],
+    ["Vilafranca de Bonany", 39.5672, 3.0900, 3],
+    ["Montuïri", 39.5675, 2.9803, 3],
+    ["Algaida", 39.5586, 2.8914, 5],
+    ["Llucmajor", 39.4896, 2.8902, 37],
+    ["S'Arenal", 39.4985, 2.7515, 15],
+    // --- Zona Varese / Lago Maggiore
+    ["Varese", 45.8206, 8.8251, 80],
+    ["Gavirate", 45.8442, 8.7144, 9],
+    ["Besozzo", 45.8236, 8.6592, 9],
+    ["Ispra", 45.8139, 8.6167, 5],
+    ["Laveno-Mombello", 45.9019, 8.6178, 8],
+    ["Luino", 46.0017, 8.7439, 14],
+    ["Stresa", 45.8833, 8.5333, 5],
+    ["Verbania", 45.9219, 8.5514, 30],
+    ["Lesa", 45.8292, 8.5611, 3],
+    ["Ranco", 45.7897, 8.5856, 1],
+    ["Angera", 45.7700, 8.5856, 5],
+    ["Arona", 45.7576, 8.5594, 14],
+    ["Sesto Calende", 45.7300, 8.6367, 11],
+    ["Castelletto Ticino", 45.7125, 8.6333, 9],
+    ["Vergiate", 45.7140, 8.6990, 9],
+    ["Somma Lombardo", 45.6833, 8.7083, 17],
+    ["Azzate", 45.7800, 8.7906, 5],
+    ["Gallarate", 45.6600, 8.7936, 53],
+    ["Cardano al Campo", 45.6322, 8.7608, 15],
+    ["Lonate Pozzolo", 45.5983, 8.7567, 12],
+    ["Busto Arsizio", 45.6119, 8.8508, 83],
+    ["Tradate", 45.7106, 8.9075, 18],
+    ["Castiglione Olona", 45.7600, 8.8800, 8],
+    ["Induno Olona", 45.8331, 8.8486, 10],
+    ["Malnate", 45.7967, 8.8828, 17],
+    ["Saronno", 45.6256, 9.0328, 39],
+    ["Como", 45.8081, 9.0852, 84],
+  ];
+
+  let datiGraficaStrava = null; // { iso, tracce } del giorno attualmente mostrato nella mappa
+
+  function impostaDatiGraficaStrava(iso, tracce) {
+    datiGraficaStrava = iso ? { iso, tracce } : null;
+    document.getElementById("btn-scarica-strava").disabled = !datiGraficaStrava;
+  }
+
+  // Proiezione Web Mercator adattata a un'area del canvas (scala uniforme,
+  // centrata). Oltre a lat/lon -> pixel espone la funzione inversa
+  // (pixel -> lat/lon), usata per capire quali contorni cadono nell'immagine.
+  function creaProiezioneGrafica(tracce, area) {
+    const rad = Math.PI / 180;
+    const mercY = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * rad) / 2));
+    const invMercY = (y) => (2 * Math.atan(Math.exp(y)) - Math.PI / 2) / rad;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const t of tracce) {
+      for (const [lat, lon] of t) {
+        const x = lon * rad, y = mercY(lat);
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+    }
+    // Estensione minima (~4 km) per i giri cortissimi + piccolo margine.
+    const dx = Math.max(maxX - minX, 0.0007) * 1.06;
+    const dy = Math.max(maxY - minY, 0.0007) * 1.06;
+    const scala = Math.min(area.w / dx, area.h / dy);
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    return {
+      px: (lat, lon) => [
+        area.x + area.w / 2 + (lon * rad - cx) * scala,
+        area.y + area.h / 2 - (mercY(lat) - cy) * scala,
+      ],
+      inv: (x, y) => [
+        invMercY(cy - (y - area.y - area.h / 2) / scala),
+        (cx + (x - area.x - area.w / 2) / scala) / rad,
+      ],
+    };
+  }
+
+  // Disegna i contorni costieri come sagoma sottile e discreta (bianco
+  // semitrasparente con un leggero filo scuro per restare leggibile sulle
+  // foto). Passa da un canvas di appoggio per sfumare la sagoma verso il
+  // basso, cosi' non invade la zona di legenda e statistiche.
+  function disegnaCosteGrafica(ctx, proiezione, S) {
+    const [latMax, lonMin] = proiezione.inv(0, 0);
+    const [latMin, lonMax] = proiezione.inv(S, S);
+    const visibili = COSTE_LOCALI.filter((c) =>
+      !(c.bbox.maxLat < latMin || c.bbox.minLat > latMax || c.bbox.maxLon < lonMin || c.bbox.minLon > lonMax));
+    if (!visibili.length) return;
+
+    const appoggio = document.createElement("canvas");
+    appoggio.width = S;
+    appoggio.height = S;
+    const oc = appoggio.getContext("2d");
+    oc.lineJoin = "round";
+    oc.lineCap = "round";
+    for (const [larghezza, colore] of [[5, "rgba(0,0,0,0.28)"], [2.5, "rgba(255,255,255,0.6)"]]) {
+      oc.lineWidth = larghezza;
+      oc.strokeStyle = colore;
+      oc.beginPath();
+      for (const c of visibili) {
+        c.pts.forEach(([lat, lon], i) => {
+          const [x, y] = proiezione.px(lat, lon);
+          if (i === 0) oc.moveTo(x, y); else oc.lineTo(x, y);
+        });
+        oc.closePath();
+      }
+      oc.stroke();
+    }
+
+    // Sfumatura: piena fino a y=660, invisibile da y=760 in giu'.
+    oc.globalCompositeOperation = "destination-in";
+    const sfumatura = oc.createLinearGradient(0, 660, 0, 760);
+    sfumatura.addColorStop(0, "rgba(0,0,0,1)");
+    sfumatura.addColorStop(1, "rgba(0,0,0,0)");
+    oc.fillStyle = sfumatura;
+    oc.fillRect(0, 0, S, S);
+    ctx.drawImage(appoggio, 0, 0);
+  }
+
+  // Filtro dinamico dei paesi: tiene solo quelli entro RAGGIO_PAESI_KM dal
+  // punto del tragitto piu' vicino. Il paese piu' vicino alla partenza e
+  // quello piu' vicino all'arrivo (entro RAGGIO_PAESI_ESTREMI_KM) hanno la
+  // precedenza nel caso le etichette siano troppe. Calcolo interamente locale.
+  function trovaPaesiVicini(tracce) {
+    const punti = [];
+    for (const t of tracce) for (const p of t) punti.push(p);
+    if (!punti.length) return [];
+
+    let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+    for (const [lat, lon] of punti) {
+      if (lat < minLat) minLat = lat; if (lat > maxLat) maxLat = lat;
+      if (lon < minLon) minLon = lon; if (lon > maxLon) maxLon = lon;
+    }
+    const KM_PER_GRADO_LAT = 110.574;
+    const mLat = RAGGIO_PAESI_KM / KM_PER_GRADO_LAT;
+
+    const distKm = (lat, lon, kx, plat, plon) => {
+      const dx = (plon - lon) * kx, dy = (plat - lat) * KM_PER_GRADO_LAT;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const partenza = punti[0];
+    const arrivo = punti[punti.length - 1];
+    const trovati = [];
+
+    for (const [nome, lat, lon, peso] of PAESI_LOCALI) {
+      if (lat < minLat - mLat || lat > maxLat + mLat) continue;
+      const kx = 111.320 * Math.cos((lat * Math.PI) / 180);
+      const mLon = RAGGIO_PAESI_KM / kx;
+      if (lon < minLon - mLon || lon > maxLon + mLon) continue;
+
+      let min2 = Infinity;
+      for (const p of punti) {
+        const dx = (p[1] - lon) * kx, dy = (p[0] - lat) * KM_PER_GRADO_LAT;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < min2) min2 = d2;
+      }
+      if (min2 <= RAGGIO_PAESI_KM * RAGGIO_PAESI_KM) {
+        trovati.push({
+          nome, lat, lon, peso,
+          distKm: Math.sqrt(min2),
+          dPartenza: distKm(lat, lon, kx, partenza[0], partenza[1]),
+          dArrivo: distKm(lat, lon, kx, arrivo[0], arrivo[1]),
+          prioritario: false,
+        });
+      }
+    }
+
+    // Precedenza ai paesi di partenza e di arrivo.
+    for (const chiave of ["dPartenza", "dArrivo"]) {
+      let migliore = null;
+      for (const p of trovati) if (!migliore || p[chiave] < migliore[chiave]) migliore = p;
+      if (migliore && migliore[chiave] <= RAGGIO_PAESI_ESTREMI_KM) migliore.prioritario = true;
+    }
+
+    return trovati.sort((a, b) => (b.prioritario - a.prioritario) || (b.peso - a.peso));
+  }
+
+  // Punto + nome di ogni paese vicino. Le etichette provano piu' posizioni
+  // attorno al punto e scelgono quella che copre meno traccia, senza mai
+  // sovrapporsi tra loro.
+  function disegnaPaesiGrafica(ctx, proiezione, paesi, tracciePx, S) {
+    if (!paesi.length) return;
+
+    const tutti = [];
+    for (const t of tracciePx) for (const p of t) tutti.push(p);
+    const passoCampione = Math.max(1, Math.floor(tutti.length / 1200));
+    const campione = [];
+    for (let i = 0; i < tutti.length; i += passoCampione) campione.push(tutti[i]);
+
+    const ALT = 30, MARGINE = 36, YMAX = 735, DIST = 16;
+    const intersecano = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+    ctx.font = FONT_PAESI_GRAFICA;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+
+    const occupati = [];
+    let piazzati = 0;
+
+    for (const p of paesi) {
+      if (piazzati >= MAX_PAESI_GRAFICA) break;
+      const [cx, cy] = proiezione.px(p.lat, p.lon);
+      if (cx < MARGINE || cx > S - MARGINE || cy < MARGINE || cy > YMAX) continue;
+
+      const puntoRect = { x: cx - 9, y: cy - 9, w: 18, h: 18 };
+      if (occupati.some((o) => intersecano(puntoRect, o))) continue;
+
+      const larg = ctx.measureText(p.nome).width + 4;
+      const candidati = [
+        { x: cx + DIST, y: cy - ALT / 2 },                  // destra
+        { x: cx - DIST - larg, y: cy - ALT / 2 },           // sinistra
+        { x: cx - larg / 2, y: cy - DIST - ALT },           // sopra
+        { x: cx - larg / 2, y: cy + DIST },                 // sotto
+        { x: cx + DIST - 4, y: cy - DIST - ALT + 8 },       // alto-destra
+        { x: cx - DIST - larg + 4, y: cy - DIST - ALT + 8 },// alto-sinistra
+        { x: cx + DIST - 4, y: cy + DIST - 8 },             // basso-destra
+        { x: cx - DIST - larg + 4, y: cy + DIST - 8 },      // basso-sinistra
+      ].map((c) => ({ x: c.x, y: c.y, w: larg, h: ALT }));
+
+      let scelto = null, penalitaMin = Infinity;
+      for (const c of candidati) {
+        if (c.x < MARGINE || c.x + c.w > S - MARGINE || c.y < MARGINE || c.y + c.h > YMAX) continue;
+        if (occupati.some((o) => intersecano(c, o))) continue;
+        let penalita = 0;
+        for (const q of campione) {
+          if (q[0] > c.x - 10 && q[0] < c.x + c.w + 10 && q[1] > c.y - 10 && q[1] < c.y + c.h + 10) penalita++;
+        }
+        if (penalita < penalitaMin) { penalitaMin = penalita; scelto = c; }
+        if (penalita === 0) break;
+      }
+      if (!scelto) continue;
+
+      occupati.push(scelto, puntoRect);
+      piazzati++;
+
+      // Puntino
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6.5, 0, Math.PI * 2);
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = "rgba(0,0,0,0.65)";
+      ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      // Nome con alone scuro per la leggibilita' sulle foto
+      const ty = scelto.y + ALT / 2;
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = "rgba(0,0,0,0.6)";
+      ctx.strokeText(p.nome, scelto.x + 2, ty);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(p.nome, scelto.x + 2, ty);
+    }
+  }
+
+  // Legenda: barra a 4 tacche (stessi colori e soglie della heatmap), ognuna
+  // con la propria etichetta di velocita' scritta sotto.
+  function disegnaLegendaVelocitaGrafica(ctx) {
+    const voci = [
+      { colore: coloreDaVelocita(0), testo: `≤ ${SOGLIA_VELOCITA_BASSA_KMH} km/h` },
+      { colore: coloreDaVelocita(SOGLIA_VELOCITA_BASSA_KMH + 1), testo: `≤ ${SOGLIA_VELOCITA_MEDIA_KMH} km/h` },
+      { colore: coloreDaVelocita(SOGLIA_VELOCITA_MEDIA_KMH + 1), testo: `≤ ${SOGLIA_VELOCITA_ALTA_KMH} km/h` },
+      { colore: coloreDaVelocita(SOGLIA_VELOCITA_ALTA_KMH + 1), testo: `> ${SOGLIA_VELOCITA_ALTA_KMH} km/h` },
+    ];
+    const x0 = 90, y = 785, passo = 195, lunghezza = 160, raggio = 9;
+
+    ctx.lineCap = "round";
+    for (const [larghezza, colore] of [[raggio * 2 + 9, "rgba(0,0,0,0.45)"], [raggio * 2, null]]) {
+      ctx.lineWidth = larghezza;
+      voci.forEach((v, i) => {
+        ctx.beginPath();
+        ctx.moveTo(x0 + i * passo + raggio, y);
+        ctx.lineTo(x0 + i * passo + lunghezza - raggio, y);
+        ctx.strokeStyle = colore || v.colore;
+        ctx.stroke();
+      });
+    }
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = '600 26px Inter, "Segoe UI", sans-serif';
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    voci.forEach((v, i) => ctx.fillText(v.testo, x0 + i * passo, y + 44));
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+  }
+
+  function disegnaStatisticheGrafica(ctx, kmTotali, velocitaMedia) {
+    const kmTesto = kmTotali.toLocaleString("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const velTesto = velocitaMedia !== null && velocitaMedia !== undefined ? String(Math.round(velocitaMedia)) : "—";
+    const blocchi = [
+      { x: 90, etichetta: "KM TOTALI", valore: kmTesto, unita: "km" },
+      { x: 560, etichetta: "VELOCITÀ MEDIA", valore: velTesto, unita: "km/h" },
+    ];
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 3;
+
+    for (const b of blocchi) {
+      ctx.font = '600 28px Inter, "Segoe UI", sans-serif';
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.fillText(b.etichetta, b.x, 896);
+
+      ctx.font = '700 150px Rajdhani, Inter, "Segoe UI", sans-serif';
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(b.valore, b.x, 1022);
+      const larghezzaValore = ctx.measureText(b.valore).width;
+
+      ctx.font = '600 40px Rajdhani, Inter, "Segoe UI", sans-serif';
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.fillText(b.unita, b.x + larghezzaValore + 12, 1022);
+    }
+
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+  }
+
+  async function generaEScaricaGraficaStrava() {
+    if (!datiGraficaStrava) return;
+    const bottone = document.getElementById("btn-scarica-strava");
+    const stato = document.getElementById("strava-stato");
+    const { iso, tracce } = datiGraficaStrava;
+
+    bottone.disabled = true;
+    stato.textContent = "Generazione in corso…";
+
+    try {
+      // I font Google devono essere pronti prima di scrivere sul canvas
+      // (sono gia' nella pagina: nessuna richiesta aggiuntiva significativa).
+      try {
+        await Promise.all([
+          document.fonts.load('700 150px Rajdhani'),
+          document.fonts.load('600 28px Inter'),
+        ]);
+      } catch (e) { /* si usano i font di ripiego */ }
+
+      const S = DIMENSIONE_GRAFICA_STRAVA;
+      const canvas = document.createElement("canvas");
+      canvas.width = S;
+      canvas.height = S;
+      const ctx = canvas.getContext("2d"); // nessun fillRect di sfondo: PNG trasparente
+
+      const proiezione = creaProiezioneGrafica(tracce, AREA_TRACCIA_GRAFICA);
+      const tracciePx = tracce.map((t) => t.map(([lat, lon, v]) => [...proiezione.px(lat, lon), v]));
+
+      // --- 1) Sagoma della costa (sotto a tutto, sottile e discreta)
+      disegnaCosteGrafica(ctx, proiezione, S);
+
+      // --- 2) Traccia: contorno scuro (leggibilita' sulle foto) + linea colorata spessa
+      const larghezza = 18;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(0,0,0,0.45)";
+      ctx.lineWidth = larghezza + 9;
+      ctx.beginPath();
+      for (const t of tracciePx) {
+        if (!t.length) continue;
+        if (t.length === 1) { ctx.moveTo(t[0][0], t[0][1]); ctx.lineTo(t[0][0], t[0][1]); continue; }
+        ctx.moveTo(t[0][0], t[0][1]);
+        for (let i = 1; i < t.length; i++) ctx.lineTo(t[i][0], t[i][1]);
+      }
+      ctx.stroke();
+
+      ctx.lineWidth = larghezza;
+      for (const t of tracciePx) {
+        if (!t.length) continue;
+        if (t.length === 1) {
+          ctx.beginPath();
+          ctx.moveTo(t[0][0], t[0][1]);
+          ctx.lineTo(t[0][0], t[0][1]);
+          ctx.strokeStyle = coloreDaVelocita(t[0][2]);
+          ctx.stroke();
+          continue;
+        }
+        for (let i = 1; i < t.length; i++) {
+          ctx.beginPath();
+          ctx.moveTo(t[i - 1][0], t[i - 1][1]);
+          ctx.lineTo(t[i][0], t[i][1]);
+          ctx.strokeStyle = coloreDaVelocita(t[i][2]); // come sulla mappa: colore del punto di arrivo
+          ctx.stroke();
+        }
+      }
+
+      // --- 3) Paesi sfiorati dal tragitto (filtro dinamico, tutto in locale)
+      disegnaPaesiGrafica(ctx, proiezione, trovaPaesiVicini(tracce), tracciePx, S);
+
+      // --- 4) Km e velocita' media (dati del calendario; ripiego: somma dei tratti)
+      const voce = datiPerData[iso];
+      let km = voce && typeof voce.km === "number" ? voce.km : null;
+      if (km === null || km <= 0) {
+        km = 0;
+        for (const t of tracce) {
+          for (let i = 1; i < t.length; i++) km += distanzaMetri(t[i - 1][0], t[i - 1][1], t[i][0], t[i][1]) / 1000;
+        }
+      }
+      disegnaLegendaVelocitaGrafica(ctx);
+      disegnaStatisticheGrafica(ctx, km, voce ? voce.velocita_media_kmh : null);
+
+      // --- Download PNG
+      await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (!blob) { reject(new Error("toBlob ha restituito null")); return; }
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `strava-${iso}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          resolve();
+        }, "image/png");
+      });
+
+      stato.textContent = "Grafica scaricata ✔";
+    } catch (errore) {
+      stato.textContent = "Errore nella creazione della grafica.";
+      console.error("Errore generazione grafica Strava:", errore);
+    } finally {
+      bottone.disabled = !datiGraficaStrava;
+    }
+  }
+
+  document.getElementById("btn-scarica-strava").addEventListener("click", generaEScaricaGraficaStrava);
 
   // --------------------------------------------------------------------
   // CALENDARIO INTERATTIVO
